@@ -1022,24 +1022,6 @@ void DbInterface::processMuxLinkmgrConfigNotifiction(std::deque<swss::KeyOpField
             catch (boost::bad_lexical_cast const &badLexicalCast) {
                 MUXLOGWARNING(boost::format("bad lexical cast: %s") % badLexicalCast.what());
             }
-        } else if (key == "MUXLOGGER") {
-            std::string operation = kfvOp(entry);
-            std::vector<swss::FieldValueTuple> fieldValues = kfvFieldsValues(entry);
-
-            for (auto &fieldValue: fieldValues) {
-                std::string f = fvField(fieldValue);
-                std::string v = fvValue(fieldValue);
-                if (f == "log_verbosity") {
-                    mMuxManagerPtr->updateLogVerbosity(v);
-                }
-
-                MUXLOGINFO(boost::format("key: %s, Operation: %s, f: %s, v: %s") %
-                    key %
-                    operation %
-                    f %
-                    v
-                );
-            }
         }
     }
 }

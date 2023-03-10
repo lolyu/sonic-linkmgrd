@@ -852,8 +852,7 @@ TEST_F(MuxManagerTest, LinkmgrdConfig)
         {"LINK_PROBER", "SET", {{"use_well_known_mac", "enable"}}},
         {"LINK_PROBER", "SET", {{"interval_v4", "abc"}}},
         {"LINK_PROBER", "SET", {{"src_mac", "ToRMac"}}},
-        {"LINK_PROBER", "SET", {{"interval_pck_loss_count_update", "900"}}},
-        {"MUXLOGGER", "SET", {{"log_verbosity", "warning"}}},
+        {"LINK_PROBER", "SET", {{"interval_pck_loss_count_update", "900"}}}
     };
     processMuxLinkmgrConfigNotifiction(entries);
 
@@ -863,7 +862,6 @@ TEST_F(MuxManagerTest, LinkmgrdConfig)
     EXPECT_TRUE(getNegativeStateChangeRetryCount(port) == negativeSignalCount);
     EXPECT_TRUE(getLinkProberStatUpdateIntervalCount(port) == pckLossStatUpdateInterval);
     EXPECT_TRUE(getLinkWaitTimeout_msec(port) == (negativeSignalCount + 1) * v4PorbeInterval);
-    EXPECT_TRUE(common::MuxLogger::getInstance()->getLevel() == boost::log::trivial::warning);
     EXPECT_TRUE(getIfUseWellKnownMac(port) == useWellKnownMac);
     EXPECT_TRUE(getIfUseToRMac(port) == useTorMacAddress);
 

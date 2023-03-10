@@ -21,7 +21,6 @@
  *      Author: Tamer Ahmed
  */
 
-#include <boost/log/sinks/syslog_backend.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 #include <boost/log/utility/setup/file.hpp>
 #include "boost/log/utility/setup/from_settings.hpp"
@@ -33,6 +32,26 @@
 
 namespace common
 {
+
+const MuxLogger::BoostLogPriorityMap MuxLogger::boostLogPriorityMap = {
+    { boost::log::sinks::syslog::emergency, boost::log::trivial::fatal },
+    { boost::log::sinks::syslog::alert, boost::log::trivial::fatal },
+    { boost::log::sinks::syslog::critical, boost::log::trivial::fatal },
+    { boost::log::sinks::syslog::error, boost::log::trivial::error },
+    { boost::log::sinks::syslog::warning, boost::log::trivial::error },
+    { boost::log::sinks::syslog::notice, boost::log::trivial::warning },
+    { boost::log::sinks::syslog::info, boost::log::trivial::info },
+    { boost::log::sinks::syslog::debug, boost::log::trivial::trace }
+};
+
+const MuxLogger::SyslogPriorityMap MuxLogger::syslogPriorityMap = {
+    { boost::log::trivial::fatal, boost::log::sinks::syslog::alert },
+    { boost::log::trivial::error, boost::log::sinks::syslog::error },
+    { boost::log::trivial::warning, boost::log::sinks::syslog::notice },
+    { boost::log::trivial::info, boost::log::sinks::syslog::info },
+    { boost::log::trivial::debug, boost::log::sinks::syslog::debug },
+    { boost::log::trivial::trace, boost::log::sinks::syslog::debug }
+};
 
 //
 // ---> operator()(const boost::log::runtime_error &ex);
@@ -76,6 +95,27 @@ MuxLoggerPtr MuxLogger::getInstance()
     return MuxLoggerPtr;
 }
 
+void MuxLogger::swssPrioNotify(const std::string& component, const std::string& prioStr)
+{
+    namespace sinks = boost::log::sinks;
+
+    if (swss::Logger::priorityStringMap.find(prioStr) != swss::Logger::priorityStringMap.end()) {
+        auto syslog_level = static_cast<sinks::syslog::level>(swss::Logger::priorityStringMap.at(prioStr));
+        if (boostLogPriorityMap.find(syslog_level) != boostLogPriorityMap.end()) {
+            auto boost_log_level = boostLogPriorityMap.at(syslog_level);
+            MUXLOGFATAL(boost::format("Updated log level to: %s") % boost_log_level);
+            getInstance()->setLevel(boost_log_level);
+        }
+    }
+}
+
+void MuxLogger::swssOutputNotify(const std::string& component, const std::string& outputStr)
+{
+    if (outputStr != "SYSLOG") {
+        MUXLOGFATAL("Invalid logoutput, linkmgrd only supports 'SYSLOG'.");
+    }
+}
+
 //
 // ---> initialize(std::string &prog,
 //                 std::string &path,
@@ -87,11 +127,13 @@ void MuxLogger::initialize(
     std::string &prog,
     std::string &path,
     boost::log::trivial::severity_level level,
-    bool extraLogFile
+    bool extraLogFile,
+    bool linkToSwssLogger
 )
 {
     namespace trivial = boost::log::trivial;
     namespace keywords = boost::log::keywords;
+    namespace sinks = boost::log::sinks;
 
     mLevel = level;
 
@@ -114,6 +156,29 @@ void MuxLogger::initialize(
     );
 
     addSyslogSink(prog);
+
+    if (linkToSwssLogger) {
+        const std::string dbname = "linkmgrd";
+
+        if (syslogPriorityMap.find(level) != syslogPriorityMap.end()) {
+            auto syslogPrio = syslogPriorityMap.at(level);
+
+            for (auto const &p : swss::Logger::priorityStringMap) {
+                if (static_cast<sinks::syslog::level>(p.second) == syslogPrio) {
+                    swss::Logger::linkToDbNative(dbname);
+                    // replace priority and output observers with local ones
+                    swss::Logger::linkToDbWithOutput(
+                        dbname,
+                        swssPrioNotify,
+                        p.first,
+                        swssOutputNotify,
+                        "SYSLOG"
+                    );
+                    break;
+                }
+            }
+        }
+    }
 }
 
 //
@@ -146,12 +211,9 @@ void MuxLogger::addSyslogSink(std::string &prog)
 
         // Create and fill in another level translator for "Severity" attribute of type string
         sinks::syslog::custom_severity_mapping<boost::log::trivial::severity_level> mapping("Severity");
-        mapping[boost::log::trivial::trace] = sinks::syslog::debug;
-        mapping[boost::log::trivial::debug] = sinks::syslog::debug;
-        mapping[boost::log::trivial::info] = sinks::syslog::info;
-        mapping[boost::log::trivial::warning] = sinks::syslog::warning;
-        mapping[boost::log::trivial::error] = sinks::syslog::error;
-        mapping[boost::log::trivial::fatal] = sinks::syslog::alert;
+        for (auto const &p : syslogPriorityMap) {
+            mapping[p.first] = p.second;
+        }
         sink->set_severity_mapper(mapping);
 
         // Add the sink to the core

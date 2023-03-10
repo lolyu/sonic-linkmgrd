@@ -128,31 +128,6 @@ void MuxManager::terminate()
 }
 
 //
-// ---> updateLogVerbosity(std::string &verbosity);
-//
-// update current log verbosity
-//
-void MuxManager::updateLogVerbosity(std::string &verbosity)
-{
-    boost::log::trivial::severity_level level = boost::log::trivial::warning;
-
-    if (verbosity == "trace") {
-        level = boost::log::trivial::trace;
-    } else if (verbosity == "debug") {
-        level = boost::log::trivial::debug;
-    } else if (verbosity == "info") {
-        level = boost::log::trivial::info;
-    } else if (verbosity == "error") {
-        level = boost::log::trivial::error;
-    } else if (verbosity == "fatal") {
-        level = boost::log::trivial::fatal;
-    }
-
-    common::MuxLogger::getInstance()->setLevel(level);
-    MUXLOGFATAL(boost::format("Updated log level to: %s") % level);
-}
-
-//
 // ---> addOrUpdateMuxPort(const std::string &portName, boost::asio::ip::address address);
 //
 // update MUX port server/blade IPv4 Address. If port is not found, create new MuxPort object

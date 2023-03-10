@@ -8,7 +8,8 @@ void initLogger()
     std::string prog_name = "linkmgrd-test";
     std::string log_filename = "/tmp/" + prog_name + ".log";
     bool extraLogFile = true;
-    common::MuxLogger::getInstance()->initialize(prog_name, log_filename, boost::log::trivial::debug, extraLogFile);
+    bool linkToSwssLogger = false;
+    common::MuxLogger::getInstance()->initialize(prog_name, log_filename, boost::log::trivial::debug, extraLogFile, linkToSwssLogger);
     common::MuxLogger::getInstance()->setLevel(boost::log::trivial::trace);
 }
 

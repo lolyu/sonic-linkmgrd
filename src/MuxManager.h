@@ -287,17 +287,6 @@ public:
     void terminate();
 
     /**
-    *@method updateLogVerbosity
-    *
-    *@brief update current log verbosity
-    *
-    *@param verbosity (in)   log verbosity
-    *
-    *@return none
-    */
-    void updateLogVerbosity(std::string &verbosity);
-
-    /**
     *@method addOrUpdateMuxPort
     *
     *@brief update MUX port server/blade IPv4 Address. If port is not found, create new MuxPort object
