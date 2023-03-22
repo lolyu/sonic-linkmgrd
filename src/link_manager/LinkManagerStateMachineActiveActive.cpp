@@ -51,7 +51,9 @@ ActiveActiveStateMachine::ActiveActiveStateMachine(
       mDeadlineTimer(strand.context()),
       mWaitTimer(strand.context()),
       mPeerWaitTimer(strand.context()),
-      mResyncTimer(strand.context())
+      mResyncTimer(strand.context()),
+      mMuxUpdateWaitState(getMuxStateMachine(), muxPortConfig),
+      mMuxProbeWaitState(getMuxStateMachine(), muxPortConfig)
 {
     assert(muxPortPtr != nullptr);
     mMuxPortPtr->setMuxLinkmgrState(mLabel);
@@ -181,9 +183,10 @@ void ActiveActiveStateMachine::handleMuxStateNotification(mux_state::MuxState::L
     mLastMuxStateNotification = label;
 
     if (mComponentInitState.all()) {
-        if (mMuxStateMachine.getWaitStateCause() != mux_state::WaitState::WaitStateCause::SwssUpdate) {
+        if (!mMuxUpdateWaitState.testWaitStateCause(mux_state::WaitState::WaitStateCause::SwssUpdate)) {
             MUXLOGWARNING(boost::format("%s: Received unsolicited MUX state change notification!") % mMuxPortConfig.getPortName());
         }
+        mMuxUpdateWaitState.resetWaitStateCause();
         mProbePeerTorFnPtr();
         mResumeTxFnPtr();
         postMuxStateEvent(label);
@@ -278,12 +281,13 @@ void ActiveActiveStateMachine::handleProbeMuxStateNotification(mux_state::MuxSta
     }
 
     if (mComponentInitState.all()) {
-        if (mMuxStateMachine.getWaitStateCause() != mux_state::WaitState::WaitStateCause::DriverUpdate) {
+        if (!mMuxProbeWaitState.testWaitStateCause(mux_state::WaitState::WaitStateCause::DriverUpdate)) {
             MUXLOGWARNING(
                 boost::format("%s: Received unsolicited MUX state probe notification!") %
                 mMuxPortConfig.getPortName()
             );
         }
+        mMuxProbeWaitState.resetWaitStateCause(mux_state::WaitState::WaitStateCause::DriverUpdate);
 
         postMuxStateEvent(label);
     } else {
@@ -1022,11 +1026,10 @@ void ActiveActiveStateMachine::switchMuxState(
             mSuspendTxFnPtr(mMuxPortConfig.getLinkWaitTimeout_msec());
         }
         enterMuxState(nextState, label);
-        mMuxStateMachine.setWaitStateCause(mux_state::WaitState::WaitStateCause::SwssUpdate);
         mMuxPortPtr->postMetricsEvent(Metrics::SwitchingStart, label);
         mMuxPortPtr->setMuxState(label);
         mDeadlineTimer.cancel();
-        startMuxWaitTimer();
+        startMuxWaitTimer(mux_state::WaitState::WaitStateCause::SwssUpdate);
     } else {
         probeMuxState();
     }
@@ -1059,9 +1062,8 @@ void ActiveActiveStateMachine::switchPeerMuxState(mux_state::MuxState::Label lab
 //
 void ActiveActiveStateMachine::probeMuxState()
 {
-    mMuxStateMachine.setWaitStateCause(mux_state::WaitState::WaitStateCause::DriverUpdate);
     mMuxPortPtr->probeMuxState();
-    startMuxWaitTimer();
+    startMuxWaitTimer(mux_state::WaitState::WaitStateCause::DriverUpdate);
 }
 
 //
@@ -1183,37 +1185,53 @@ void ActiveActiveStateMachine::handleMuxProbeTimeout(boost::system::error_code e
 }
 
 //
-// ---> startMuxWaitTimer(uint32_t factor);
+// ---> startMuxWaitTimer(mux_state::WaitState::WaitStateCause waitCause, uint32_t factor);
 //
 // start a timer to wait for mux state notification from xcvrd/orchagent
 //
-void ActiveActiveStateMachine::startMuxWaitTimer(uint32_t factor)
+void ActiveActiveStateMachine::startMuxWaitTimer(mux_state::WaitState::WaitStateCause waitCause, uint32_t factor)
 {
+    // set wait cause
+    switch (waitCause) {
+        case mux_state::WaitState::WaitStateCause::SwssUpdate:
+            mMuxUpdateWaitState.setWaitStateCause(waitCause);
+            break;
+        case mux_state::WaitState::WaitStateCause::DriverUpdate:
+            mMuxProbeWaitState.setWaitStateCause(waitCause);
+            break;
+        default:
+            break;
+    }
+
     mWaitTimer.expires_from_now(boost::posix_time::milliseconds(
         factor * mMuxPortConfig.getNegativeStateChangeRetryCount() * mMuxPortConfig.getTimeoutIpv4_msec()
     ));
     mWaitTimer.async_wait(getStrand().wrap(boost::bind(
         &ActiveActiveStateMachine::handleMuxWaitTimeout,
         this,
-        boost::asio::placeholders::error
+        boost::asio::placeholders::error,
+        waitCause
     )));
     startWaitMux();
 }
 
 //
-// ---> handleMuxWaitTimeout(boost::system::error_code errorCode);
+// ---> handleMuxWaitTimeout(boost::system::error_code errorCode, mux_state::WaitState::WaitStateCause waitCause);
 //
 // handle when xcrvrd/orchagent has timed out responding mux state
 //
-void ActiveActiveStateMachine::handleMuxWaitTimeout(boost::system::error_code errorCode)
+void ActiveActiveStateMachine::handleMuxWaitTimeout(
+    boost::system::error_code errorCode,
+    mux_state::WaitState::WaitStateCause waitCause
+)
 {
     MUXLOGDEBUG(mMuxPortConfig.getPortName());
 
     stopWaitMux();
     if (errorCode == boost::system::errc::success) {
-        if (mMuxStateMachine.getWaitStateCause() == mux_state::WaitState::WaitStateCause::SwssUpdate) {
+        if (waitCause == mux_state::WaitState::WaitStateCause::SwssUpdate) {
             MUXLOGTIMEOUT(mMuxPortConfig.getPortName(), "orchagent timed out responding to linkmgrd", mCompositeState);
-        } else if (mMuxStateMachine.getWaitStateCause() == mux_state::WaitState::WaitStateCause::DriverUpdate) {
+        } else if (waitCause == mux_state::WaitState::WaitStateCause::DriverUpdate) {
             MUXLOGTIMEOUT(mMuxPortConfig.getPortName(), "xcvrd timed out responding to linkmgrd", mCompositeState);
         } else {
             MUXLOGTIMEOUT(mMuxPortConfig.getPortName(), "Unknown timeout reason!!!", mCompositeState);

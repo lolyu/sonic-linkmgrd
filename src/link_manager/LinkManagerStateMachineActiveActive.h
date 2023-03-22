@@ -528,9 +528,10 @@ private:
      *
      * @brief start a timer to wait for mux state notification from xcvrd/orchagent
      *
+     * @param waitCause                     cause to start the mux wait timer
      * @param factor                        factor used to scale the timeout
      */
-    inline void startMuxWaitTimer(uint32_t factor = 1);
+    inline void startMuxWaitTimer(mux_state::WaitState::WaitStateCause waitCause, uint32_t factor = 1);
 
     /**
      * @method handleMuxWaitTimeout
@@ -538,8 +539,9 @@ private:
      * @brief handle when xcrvrd/orchagent has timed out responding mux state
      *
      * @param errorCode                     error code object
+     * @param waitCause                     cause to start the mux wait timer
      */
-    void handleMuxWaitTimeout(boost::system::error_code errorCode);
+    void handleMuxWaitTimeout(boost::system::error_code errorCode, mux_state::WaitState::WaitStateCause waitCause);
 
     /**
      * @method startPeerMuxWaitTimer
@@ -704,6 +706,10 @@ private: // peer link prober state and mux state
     mux_state::MuxState::Label mLastMuxStateNotification = mux_state::MuxState::Label::Unknown;
     mux_state::MuxState::Label mLastMuxProbeNotification = mux_state::MuxState::Label::Unknown;
     LastMuxNotificationType mLastMuxNotificationType = LastMuxNotificationType::MuxNotificationNotReceived;
+
+    // let's keep track of mux update and mux probe waiting separately here as they could overlap
+    mux_state::WaitState mMuxUpdateWaitState;
+    mux_state::WaitState mMuxProbeWaitState;
 
 private:
     uint32_t mMuxProbeBackoffFactor = 1;
