@@ -236,6 +236,8 @@ void ActiveActiveStateMachine::handleSwssLinkStateNotification(const link_state:
 //
 void ActiveActiveStateMachine::handleMuxConfigNotification(const common::MuxPortConfig::Mode mode)
 {
+    MUXLOGDEBUG(mMuxPortConfig.getPortName());
+
     mMuxPortConfig.setMode(mode);
     if (mComponentInitState.all()) {
         CompositeState nextState = mCompositeState;
@@ -253,6 +255,15 @@ void ActiveActiveStateMachine::handleMuxConfigNotification(const common::MuxPort
         LOGWARNING_MUX_STATE_TRANSITION(mMuxPortConfig.getPortName(), mCompositeState, nextState);
         mCompositeState = nextState;
         updateMuxLinkmgrState();
+    } else {
+        // cache mux config if state machine is not fully initialized
+        MUXLOGINFO(boost::format("%s: Mux state: %s, mux mode config change to %s is pending.") %
+            mMuxPortConfig.getPortName() %
+            mMuxStateName[ms(mCompositeState)] %
+            mMuxConfigModeName[mode]
+        );
+        mPendingMuxModeChange = true;
+        mTargetMuxMode = mode;
     }
     shutdownOrRestartLinkProberOnDefaultRoute();
 }
@@ -501,6 +512,17 @@ void ActiveActiveStateMachine::handleStateChange(
         mStateTransitionHandler[ps(nextState)][ms(nextState)][ls(nextState)](nextState);
         LOGWARNING_MUX_STATE_TRANSITION(mMuxPortConfig.getPortName(), mCompositeState, nextState);
         mCompositeState = nextState;
+    }
+
+    if (mPendingMuxModeChange) {
+        MUXLOGINFO(boost::format("%s: Mux state: %s. Execute pending MUX mode config change to %s.") %
+            mMuxPortConfig.getPortName() %
+            mMuxStateName[ms(mCompositeState)] %
+            mMuxConfigModeName[mTargetMuxMode]
+        );
+
+        handleMuxConfigNotification(mTargetMuxMode);
+        mPendingMuxModeChange = false;
     }
 
     updateMuxLinkmgrState();
@@ -1006,7 +1028,8 @@ void ActiveActiveStateMachine::switchMuxState(
     if (forceSwitch ||
         mMuxPortConfig.getMode() == common::MuxPortConfig::Mode::Auto ||
         mMuxPortConfig.getMode() == common::MuxPortConfig::Mode::Detached ||
-        (mMuxPortConfig.getMode() == common::MuxPortConfig::Mode::Active && label == mux_state::MuxState::Label::Active)) {
+        (mMuxPortConfig.getMode() == common::MuxPortConfig::Mode::Active && label == mux_state::MuxState::Label::Active) ||
+        (mMuxPortConfig.getMode() == common::MuxPortConfig::Mode::Standby && label == mux_state::MuxState::Label::Standby)) {
         MUXLOGWARNING(
             boost::format("%s: Switching MUX state to '%s'") %
             mMuxPortConfig.getPortName() %

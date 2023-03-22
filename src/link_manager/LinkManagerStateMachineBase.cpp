@@ -30,6 +30,7 @@ std::vector<std::string> LinkManagerStateMachineBase::mLinkProberStateName = {"A
 std::vector<std::string> LinkManagerStateMachineBase::mMuxStateName = {"Active", "Standby", "Unknown", "Error", "Wait"};
 std::vector<std::string> LinkManagerStateMachineBase::mLinkStateName = {"Up", "Down"};
 std::vector<std::string> LinkManagerStateMachineBase::mLinkHealthName = {"Uninitialized", "Unhealthy", "Healthy"};
+std::vector<std::string> LinkManagerStateMachineBase::mMuxConfigModeName = {"Auto", "Manual", "Active", "Standby", "Detached"};
 
 //
 // ---> LinkManagerStateMachineBase::LinkManagerStateMachineBase(

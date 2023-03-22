@@ -949,4 +949,93 @@ TEST_F(LinkManagerStateMachineActiveActiveTest, StateMachineActivatedLinkDownMux
     VALIDATE_STATE(Unknown, Standby, Down);
 }
 
+TEST_F(LinkManagerStateMachineActiveActiveTest, MuxConfigStandbyPendingLinkProberActiveMuxStandby)
+{
+    handleMuxConfig("standby", 1);
+
+    activateStateMachine();
+    VALIDATE_STATE(Wait, Wait, Down);
+
+    postLinkEvent(link_state::LinkState::Up);
+    VALIDATE_STATE(Wait, Wait, Up);
+
+    handleMuxState("standby", 3);
+    VALIDATE_STATE(Wait, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 0);
+
+    postLinkProberEvent(link_prober::LinkProberState::Active, 3);
+    VALIDATE_STATE(Active, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 0);
+    EXPECT_EQ(mDbInterfacePtr->mLastSetMuxLinkmgrState, link_manager::LinkManagerStateMachineBase::Label::Healthy);
+}
+
+TEST_F(LinkManagerStateMachineActiveActiveTest, MuxConfigStandbyPendingLinkProberActiveMuxUnknown)
+{
+    handleMuxConfig("standby", 1);
+
+    activateStateMachine();
+    VALIDATE_STATE(Wait, Wait, Down);
+
+    postLinkEvent(link_state::LinkState::Up);
+    VALIDATE_STATE(Wait, Wait, Up);
+
+    handleMuxState("unknown", 3);
+    VALIDATE_STATE(Wait, Unknown, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 0);
+
+    postLinkProberEvent(link_prober::LinkProberState::Active, 3);
+    VALIDATE_STATE(Active, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 1);
+    EXPECT_EQ(mDbInterfacePtr->mLastSetMuxState, mux_state::MuxState::Label::Standby);
+    EXPECT_EQ(mDbInterfacePtr->mLastSetMuxLinkmgrState, link_manager::LinkManagerStateMachineBase::Label::Healthy);
+
+    handleMuxState("standby", 3);
+    VALIDATE_STATE(Active, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 1);
+    EXPECT_EQ(mDbInterfacePtr->mLastSetMuxState, mux_state::MuxState::Label::Standby);
+}
+
+TEST_F(LinkManagerStateMachineActiveActiveTest, MuxConfigStandbyPendingLinkProberUnknownMuxStandby)
+{
+    handleMuxConfig("standby", 1);
+
+    activateStateMachine();
+    VALIDATE_STATE(Wait, Wait, Down);
+
+    postLinkEvent(link_state::LinkState::Up);
+    VALIDATE_STATE(Wait, Wait, Up);
+
+    handleMuxState("standby", 3);
+    VALIDATE_STATE(Wait, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 0);
+
+    postLinkProberEvent(link_prober::LinkProberState::Unknown, 3);
+    VALIDATE_STATE(Unknown, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 0);
+    EXPECT_EQ(mDbInterfacePtr->mLastSetMuxLinkmgrState, link_manager::LinkManagerStateMachineBase::Label::Unhealthy);
+}
+
+TEST_F(LinkManagerStateMachineActiveActiveTest, MuxConfigStandbyPendingLinkProberUnknownMuxUnknown)
+{
+    handleMuxConfig("standby", 1);
+
+    activateStateMachine();
+    VALIDATE_STATE(Wait, Wait, Down);
+
+    postLinkEvent(link_state::LinkState::Up);
+    VALIDATE_STATE(Wait, Wait, Up);
+
+    handleMuxState("unknown", 3);
+    VALIDATE_STATE(Wait, Unknown, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 0);
+
+    postLinkProberEvent(link_prober::LinkProberState::Unknown, 3);
+    VALIDATE_STATE(Unknown, Standby, Up);
+    EXPECT_EQ(mDbInterfacePtr->mSetMuxStateInvokeCount, 1);
+    EXPECT_EQ(mDbInterfacePtr->mLastSetMuxLinkmgrState, link_manager::LinkManagerStateMachineBase::Label::Unhealthy);
+
+    handleMuxState("unknown", 4);
+    VALIDATE_STATE(Unknown, Unknown, Up);
+}
+
 } /* namespace test */

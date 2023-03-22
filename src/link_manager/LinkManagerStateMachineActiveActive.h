@@ -718,6 +718,10 @@ private:
     DefaultRoute mDefaultRouteState = DefaultRoute::Wait;
 
     bool mContinuousLinkProberUnknownEvent = false;
+
+    // cache mux mode change received if state machine is not fully initialized
+    bool mPendingMuxModeChange = false;
+    common::MuxPortConfig::Mode mTargetMuxMode = common::MuxPortConfig::Mode::Auto;
 };
 
 } /* namespace link_manager */

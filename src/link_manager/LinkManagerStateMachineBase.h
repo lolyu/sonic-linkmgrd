@@ -615,6 +615,7 @@ private:
     static std::vector<std::string> mMuxStateName;
     static std::vector<std::string> mLinkStateName;
     static std::vector<std::string> mLinkHealthName;
+    static std::vector<std::string> mMuxConfigModeName;
 
     boost::function<void ()> mUpdateEthernetFrameFnPtr;
 
